@@ -4,3 +4,5 @@
 __pycache__/
 *.o
 moc_*
+.fmake/
+/softkeys-tests

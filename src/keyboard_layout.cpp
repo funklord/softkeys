@@ -1768,6 +1768,15 @@ const sk_layout_t *g_layout = &SK_LAYOUTS[0];
 bool g_latin_mode = true;
 
 /*
+ * The compact pages an application asked for, in the order the side
+ * button walks them (sec 4: the application chooses). The default is the
+ * three a terminal was built with, so an application that never asks
+ * gets exactly what BeerSSH had.
+ */
+QStringList g_compact_pages = { QStringLiteral("letters"), QStringLiteral("numbers"),
+                                QStringLiteral("terminal") };
+
+/*
  * Does this layout put a-z on its LETTER BLOCK -- AD, AC, AB?
  *
  * The letter block rather than the whole table, because the question is
@@ -1899,6 +1908,19 @@ sk_key_t named_key(const QString &label, int code, int span = 2) {
 	key.label = label;
 	key.value = code;
 	key.span = span;
+	return key;
+}
+
+/*
+ * A key with a fixed modifier of its own -- Ctrl+Z as Undo -- sent as one
+ * press, the way the key row's chords are, so an armed Ctrl does not make
+ * it something else. Armed Shift does combine, and that is wanted: Shift
+ * and a word jump selects a word.
+ */
+sk_key_t chord_key(const QString &label, int code, quint8 modifier, int span = 2) {
+	sk_key_t key = named_key(label, code, span);
+	key.kind = sk_key_t::CHORD;
+	key.modifier = modifier;
 	return key;
 }
 
@@ -2449,6 +2471,73 @@ sk_group_t terminal_group() {
 }
 
 /*
+ * Editing a text field: the keys the holder found missing from Android's
+ * keyboard -- arrows, undo, cut and paste (softkeys' project.md sec 1).
+ *
+ * As the widgets' own bindings rather than as actions of this keyboard's,
+ * so whatever a QLineEdit or QTextEdit does with Ctrl+Z is what Undo
+ * does, including what it does with nothing to undo. Redo is Ctrl+Shift+Z
+ * rather than Ctrl+Y: it is the binding Qt gives Redo on every platform
+ * that has one, where Ctrl+Y is Windows' and is "delete line" elsewhere.
+ *
+ * Not a page by default: a terminal has no selection to cut. An
+ * application asks for it with sk_set_compact_pages.
+ */
+sk_group_t editing_group() {
+	sk_group_t group;
+	group.id = QStringLiteral("editing");
+	group.button_label = QStringLiteral("Ed");
+	group.display_name = QStringLiteral("Editing");
+
+	group.rows.append(digit_row());
+	group.digit_row_first = true;
+
+	QList<sk_key_t> row;
+	row.append(chord_key(QStringLiteral("Undo"), Qt::Key_Z, SK_MOD_CTRL, 3));
+	row.append(chord_key(QStringLiteral("Redo"), Qt::Key_Z, SK_MOD_CTRL | SK_MOD_SHIFT, 3));
+	row.append(chord_key(QStringLiteral("Cut"), Qt::Key_X, SK_MOD_CTRL, 3));
+	row.append(chord_key(QStringLiteral("Copy"), Qt::Key_C, SK_MOD_CTRL, 3));
+	row.append(chord_key(QStringLiteral("Paste"), Qt::Key_V, SK_MOD_CTRL, 3));
+	row.append(chord_key(QStringLiteral("All"), Qt::Key_A, SK_MOD_CTRL, 3));
+	row.append(named_key(QStringLiteral("Del"), Qt::Key_Delete, 4));
+	group.rows.append(row);
+
+	/*
+	 * The cursor cluster in reading order: line start, word back, the
+	 * arrows, word forward, line end -- so the keys move further the
+	 * further out a thumb reaches.
+	 */
+	row.clear();
+	row.append(named_key(QStringLiteral("Hom"), Qt::Key_Home, 3));
+	row.append(chord_key(QStringLiteral("«"), Qt::Key_Left, SK_MOD_CTRL));
+	row.append(named_key(QStringLiteral("←"), Qt::Key_Left));
+	row.append(named_key(QStringLiteral("↓"), Qt::Key_Down));
+	row.append(named_key(QStringLiteral("↑"), Qt::Key_Up));
+	row.append(named_key(QStringLiteral("→"), Qt::Key_Right));
+	row.append(chord_key(QStringLiteral("»"), Qt::Key_Right, SK_MOD_CTRL));
+	row.append(named_key(QStringLiteral("End"), Qt::Key_End, 3));
+	row.append(named_key(QStringLiteral("PgU"), Qt::Key_PageUp));
+	row.append(named_key(QStringLiteral("PgD"), Qt::Key_PageDown));
+	group.rows.append(row);
+
+	/* Shift here is the selection key: armed or held over the cluster. */
+	row.clear();
+	row.append(modifier_key(QStringLiteral("Shift"), SK_MOD_SHIFT, 4));
+	row.append(literal(','));
+	row.append(literal('.'));
+	row.append(literal('?'));
+	row.append(literal('!'));
+	row.append(literal('\''));
+	row.append(literal('"'));
+	row.append(literal(':'));
+	row.append(named_key(QStringLiteral("Bksp"), Qt::Key_Backspace, 4));
+	group.rows.append(row);
+
+	group.rows.append(common_bottom_row());
+	return group;
+}
+
+/*
  * A fourth compact page: the slots the other three do not carry.
  *
  * The compact keyboard's three pages leave gaps by construction, and for
@@ -2664,9 +2753,12 @@ void sk_catalog::rebuild() {
 	const sk_layout_t *chosen = g_layout;
 	if (g_latin_mode && !layout_has_latin(chosen)) g_layout = &SK_LAYOUTS[0];
 
-	m_groups.append(letters_group());
-	m_groups.append(numbers_group());
-	m_groups.append(terminal_group());
+	for (const QString &id : g_compact_pages) {
+		if (id == QLatin1String("letters")) m_groups.append(letters_group());
+		else if (id == QLatin1String("numbers")) m_groups.append(numbers_group());
+		else if (id == QLatin1String("terminal")) m_groups.append(terminal_group());
+		else if (id == QLatin1String("editing")) m_groups.append(editing_group());
+	}
 
 
 	/*
@@ -2993,6 +3085,37 @@ void sk_set_latin_mode(bool on) {
 
 QString sk_keyboard_layout() {
 	return QString::fromUtf8(g_layout->id);
+}
+
+QStringList sk_compact_page_ids() {
+	return { QStringLiteral("letters"), QStringLiteral("numbers"),
+	         QStringLiteral("terminal"), QStringLiteral("editing") };
+}
+
+QStringList sk_compact_pages() {
+	return g_compact_pages;
+}
+
+bool sk_set_compact_pages(const QStringList &ids, QString *why) {
+	const QStringList known = sk_compact_page_ids();
+	QString refusal;
+	if (!ids.contains(QStringLiteral("letters"))) {
+		refusal = QStringLiteral("the letters page is required");
+	}
+	for (const QString &id : ids) {
+		if (!refusal.isEmpty()) break;
+		if (!known.contains(id)) refusal = QStringLiteral("no page is called \"%1\"").arg(id);
+		else if (ids.count(id) > 1) refusal = QStringLiteral("\"%1\" is named twice").arg(id);
+	}
+	if (!refusal.isEmpty()) {
+		if (why) *why = refusal;
+		return false;
+	}
+	if (g_compact_pages != ids) {
+		g_compact_pages = ids;
+		sk_catalog::instance().rebuild();
+	}
+	return true;
 }
 
 bool sk_set_keyboard_layout(const QString &id) {

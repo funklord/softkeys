@@ -97,7 +97,14 @@ key on this one switches back.
    `19e6d86`) and proved by its suite; the code is here from `19e6d86`, with
    this tree's own tests; BeerSSH's switch to the submodule waits on this
    tree's GitHub repository, which the holder is creating.
-3. **The generic target and the editing page.**
+3. **The generic target and the editing page.** [2026-10-08]
+   `sk_focus_target` sends every key to the focused widget as the key event
+   a physical keyboard would; `sk_set_compact_pages` lets an application
+   choose its pages, and `editing` is the new one -- Undo, Redo, Cut, Copy,
+   Paste, All, Del; Home, word back, the arrows, word forward, End, PgUp,
+   PgDn; Shift for selecting. Its keys are the widgets' own bindings (Ctrl+Z,
+   Ctrl+Shift+Z, Ctrl+Left...), so the widget decides what each does. The
+   default pages stay letters, numbers, terminal, so BeerSSH is unchanged.
 4. **The switch button.**
 5. **fuzznet adopts it**, arranged with whichever session is working there
    (its inbox, `.git/cc-inbox/`), since that tree is in active use.
@@ -119,7 +126,21 @@ README line, which is what that rule is for.
 They are left as they are rather than rewritten from memory; a comment that
 grows a softkeys-specific claim cites this document by name.
 
+**A widget refuses Ctrl text by itself, so a test of Ctrl cannot see a
+target that sends it.** The focus target turns Ctrl or Alt over a letter into
+a key with no text. Deleting that branch left the Ctrl+A test green: Qt's
+`QInputControl` refuses text under Ctrl, and the key alone matched Select All.
+Alt has no such guard, so the test asserts Alt+f types nothing; that is the
+case the branch exists for, and the sabotage now fails there.
+
 ## 7. Open
+
+- **Application shortcuts are not reached from the keyboard.** The focus
+  target delivers to the focus object, past the shortcut map a physical key
+  goes through first, so a `QAction` on Ctrl+S does not fire. Reaching the
+  map needs Qt's private window-system interface (`gui-private`), which every
+  consumer would then have to build against; not done until an application
+  wants a shortcut from the keyboard.
 
 - **Licence:** none chosen; the holder's to decide.
 - **The editor for the keyboard's keys** that the key row already has:

@@ -12,6 +12,7 @@ CONFIG += c++17
 INCLUDEPATH += $$SOFTKEYS_ROOT/include
 
 SOURCES += \
+    $$SOFTKEYS_ROOT/src/focus_target.cpp \
     $$SOFTKEYS_ROOT/src/key_cap.cpp \
     $$SOFTKEYS_ROOT/src/key_row.cpp \
     $$SOFTKEYS_ROOT/src/key_row_layout.cpp \
@@ -22,6 +23,7 @@ SOURCES += \
     $$SOFTKEYS_ROOT/src/touch_chords.cpp
 
 HEADERS += \
+    $$SOFTKEYS_ROOT/include/softkeys/focus_target.h \
     $$SOFTKEYS_ROOT/include/softkeys/key_cap.h \
     $$SOFTKEYS_ROOT/include/softkeys/key_row.h \
     $$SOFTKEYS_ROOT/include/softkeys/key_row_layout.h \

@@ -1,7 +1,11 @@
 #include <QAbstractButton>
 #include <QApplication>
+#include <QClipboard>
+#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QtTest>
 
+#include "softkeys/focus_target.h"
 #include "softkeys/key_cap.h"
 #include "softkeys/keyboard.h"
 #include "softkeys/keyboard_layout.h"
@@ -50,6 +54,23 @@ QStringList labels(const QWidget *within) {
 	return out;
 }
 
+/*
+ * The compact pages back to the default however a test leaves, since the
+ * catalog is one per application and every later test reads it.
+ */
+struct pages_restored {
+	const QStringList saved = sk_compact_pages();
+	~pages_restored() { sk_set_compact_pages(saved); }
+};
+
+/* A line edit in a window that is active, so it holds the focus. */
+bool focus_on(QLineEdit &edit) {
+	edit.show();
+	edit.activateWindow();
+	edit.setFocus();
+	return QTest::qWaitForWindowActive(&edit) && QGuiApplication::focusObject() == &edit;
+}
+
 } /* namespace */
 
 class softkeys_test : public QObject {
@@ -61,6 +82,11 @@ private slots:
 	void every_compact_page_is_one_height_and_starts_with_digits();
 	void keys_reach_the_target_as_qt_keys_and_text();
 	void the_split_holds_the_compact_keys_and_two_more();
+	void the_focus_target_types_into_the_focused_field();
+	void ctrl_over_a_letter_is_the_widgets_binding();
+	void a_named_key_carries_the_text_a_keyboard_would();
+	void the_editing_page_cuts_pastes_undoes_and_selects();
+	void pages_are_the_applications_choice();
 };
 
 void softkeys_test::a_tap_cycles_once_locked_off() {
@@ -174,6 +200,141 @@ void softkeys_test::the_split_holds_the_compact_keys_and_two_more() {
 		split.sort();
 		QCOMPARE(split, expected);
 	}
+}
+
+void softkeys_test::the_focus_target_types_into_the_focused_field() {
+	QLineEdit edit;
+	QVERIFY(focus_on(edit));
+	sk_focus_target target;
+
+	target.text(QStringLiteral("a"));
+	target.text(QStringLiteral("b"));
+	QCOMPARE(edit.text(), QStringLiteral("ab"));
+
+	target.key(Qt::Key_Left, SK_MOD_NONE);
+	target.text(QStringLiteral("x"));
+	QCOMPARE(edit.text(), QStringLiteral("axb"));
+
+	target.key(Qt::Key_Backspace, SK_MOD_NONE);
+	QCOMPARE(edit.text(), QStringLiteral("ab"));
+}
+
+void softkeys_test::a_named_key_carries_the_text_a_keyboard_would() {
+	/* A text editor inserts a tab from the event's text, not its key. */
+	QPlainTextEdit edit;
+	edit.show();
+	edit.activateWindow();
+	edit.setFocus();
+	QVERIFY(QTest::qWaitForWindowActive(&edit));
+	QCOMPARE(QGuiApplication::focusObject(), &edit);
+
+	sk_focus_target target;
+	target.text(QStringLiteral("a"));
+	target.key(Qt::Key_Tab, SK_MOD_NONE);
+	target.text(QStringLiteral("b"));
+	QCOMPARE(edit.toPlainText(), QStringLiteral("a\tb"));
+}
+
+void softkeys_test::ctrl_over_a_letter_is_the_widgets_binding() {
+	QLineEdit edit;
+	edit.setText(QStringLiteral("abc"));
+	QVERIFY(focus_on(edit));
+	sk_focus_target target;
+
+	/* An armed Ctrl and the a key: select all, not an "a" typed. */
+	target.modifiers().cycle(SK_MOD_CTRL);
+	target.text(QStringLiteral("a"));
+	QCOMPARE(edit.text(), QStringLiteral("abc"));
+	QCOMPARE(edit.selectedText(), QStringLiteral("abc"));
+	QCOMPARE(target.modifiers().state(SK_MOD_CTRL), sk_modifiers::OFF);
+
+	/*
+	 * Alt over a letter is a key with no text, as Ctrl is. A widget
+	 * refuses Ctrl text by itself, so Ctrl alone cannot show it; Alt is
+	 * where a letter sent as text gets typed.
+	 */
+	edit.setText(QStringLiteral("abc"));
+	target.modifiers().cycle(SK_MOD_ALT);
+	target.text(QStringLiteral("f"));
+	QCOMPARE(edit.text(), QStringLiteral("abc"));
+}
+
+void softkeys_test::the_editing_page_cuts_pastes_undoes_and_selects() {
+	pages_restored restore;
+	QVERIFY(sk_set_compact_pages({ QStringLiteral("letters"), QStringLiteral("editing") }));
+
+	QLineEdit edit;
+	edit.setText(QStringLiteral("hello world"));
+	QVERIFY(focus_on(edit));
+	sk_focus_target target;
+	sk_keyboard keyboard(&target);
+	keyboard.set_style(sk_catalog::STYLE_COMPACT);
+	const int page = sk_catalog::instance().index_of(QStringLiteral("editing"),
+	                                                 sk_catalog::STYLE_COMPACT);
+	QVERIFY(page >= 0);
+	keyboard.set_group(page);
+
+	auto press = [&](const char *label) {
+		QAbstractButton *button = button_labelled(keyboard, QString::fromUtf8(label));
+		if (!button) QTest::qFail(qPrintable(QStringLiteral("no key labelled %1").arg(QString::fromUtf8(label))), __FILE__, __LINE__);
+		else button->click();
+	};
+
+	QApplication::clipboard()->clear();
+	press("All");
+	press("Cut");
+	QCOMPARE(edit.text(), QString());
+	QCOMPARE(QApplication::clipboard()->text(), QStringLiteral("hello world"));
+
+	press("Paste");
+	press("Paste");
+	QCOMPARE(edit.text(), QStringLiteral("hello worldhello world"));
+	press("Undo");
+	QCOMPARE(edit.text(), QStringLiteral("hello world"));
+	press("Redo");
+	QCOMPARE(edit.text(), QStringLiteral("hello worldhello world"));
+
+	/* Shift armed over a word jump selects the word. */
+	edit.setText(QStringLiteral("hello world"));
+	press("Hom");
+	press("Shift");
+	press("\u00bb");
+	QVERIFY2(edit.selectedText().startsWith(QStringLiteral("hello")),
+	         qPrintable(edit.selectedText()));
+	QVERIFY(!edit.selectedText().contains(QStringLiteral("world")));
+
+	press("Copy");
+	QCOMPARE(QApplication::clipboard()->text(), edit.selectedText());
+}
+
+void softkeys_test::pages_are_the_applications_choice() {
+	pages_restored restore;
+	const QStringList before = sk_compact_pages();
+	QString why;
+
+	QVERIFY(!sk_set_compact_pages({ QStringLiteral("editing") }, &why));
+	QVERIFY(why.contains(QStringLiteral("letters")));
+	QVERIFY(!sk_set_compact_pages({ QStringLiteral("letters"), QStringLiteral("edit") }, &why));
+	QVERIFY(why.contains(QStringLiteral("edit")));
+	QVERIFY(!sk_set_compact_pages({ QStringLiteral("letters"), QStringLiteral("letters") }, &why));
+	QCOMPARE(sk_compact_pages(), before);
+
+	const QStringList every = sk_compact_page_ids();
+	QVERIFY(sk_set_compact_pages(every));
+	QStringList built;
+	for (const sk_group_t &page : sk_catalog::instance().all(sk_catalog::STYLE_COMPACT)) {
+		built.append(page.id);
+
+		/* Every row fills its grid: a short one puts each key after
+		 * the mistake in the wrong column. */
+		for (const QList<sk_key_t> &row : page.rows) {
+			int columns = 0;
+			for (const sk_key_t &key : row) columns += key.span;
+			QCOMPARE(columns, page.columns);
+		}
+		QCOMPARE(page.rows.size(), sk_catalog::instance().all(sk_catalog::STYLE_COMPACT).first().rows.size());
+	}
+	QCOMPARE(built.mid(0, every.size()), every);
 }
 
 int main(int argc, char *argv[]) {

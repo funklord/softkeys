@@ -4,6 +4,7 @@
 #include <QList>
 #include <QMap>
 #include <QString>
+#include <QStringList>
 
 #include "softkeys/key_row_layout.h"
 
@@ -225,6 +226,25 @@ bool sk_set_custom_layout(const QString &display_name,
 bool sk_set_keyboard_layout(const QString &id);
 
 QString sk_keyboard_layout();
+
+/*
+ * Which compact pages the side button walks, and in what order (softkeys'
+ * project.md sec 4: the application chooses). The ids are
+ * sk_compact_page_ids(): letters, numbers, terminal and editing. The
+ * default is letters, numbers, terminal -- what a terminal wants, and what
+ * BeerSSH has always had. A layout's fourth page is not chosen here; it
+ * follows the letters wherever the layout needs one.
+ *
+ * Refused, with the reason, when the letters are missing, an id is unknown
+ * or one is named twice: a keyboard that cannot type letters is not one an
+ * application can mean to ask for, and an unknown id is a typo or a newer
+ * version's page, which should not quietly become a shorter keyboard.
+ *
+ * The catalog is rebuilt, so any sk_keyboard on screen wants rebuild_keys().
+ */
+QStringList sk_compact_page_ids();
+QStringList sk_compact_pages();
+bool sk_set_compact_pages(const QStringList &ids, QString *why = nullptr);
 
 /*
  * The Latin toggle, for a layout whose letter block is not Latin.
