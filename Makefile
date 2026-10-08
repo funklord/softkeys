@@ -47,7 +47,10 @@ test: tests-build
 	@[ -x $(TEST_BIN) ] || { echo "test: no test binary at $(TEST_BIN)" >&2; exit 1; }
 	QT_QPA_PLATFORM=offscreen timeout $(TEST_TIMEOUT) ./$(TEST_BIN)
 
+# The gate's own suite first, since a gate's pass means something only once
+# the gate is known to work; both are copied from ~/.claude/tool/.
 style:
+	python3 tool/test_style_gate.py
 	python3 tool/style_gate.py check
 	python3 tool/style_gate.py docs
 
