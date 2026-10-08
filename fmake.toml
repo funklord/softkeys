@@ -1,0 +1,13 @@
+# fmake's view of this tree -- see README.md for the plain `fmake` line.
+#
+# include-dirs: the public headers are included as "softkeys/x.h", from
+# include/, which fmake does not guess (it said so, and named this line).
+# test-env: the tests run without a display, as `make test` runs them.
+
+[project]
+include-dirs = ["include"]
+test-env = ["QT_QPA_PLATFORM=offscreen"]
+exclude = ["build", "build-test"]
+
+[target.test]
+name = "softkeys-tests"

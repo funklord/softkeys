@@ -1,0 +1,18 @@
+# Configuration for tool/style_gate.py -- see code-style.md.
+# Nothing here changes the rules; it says which files in THIS tree they
+# apply to.
+
+# The tree is written in tabs from its first commit; there is no older
+# indentation to migrate from, so the width is the workspace's usual 4.
+indent_width = 4
+
+# A small tree: the floor guards against a filter collapsing the gated set,
+# and is set well under the share every source file makes up.
+floor = 0.3
+
+exclude = ["build", "build-test", "__pycache__", ".claude"]
+
+# ASCII outside string literals (code-style.md). The keyboard's legends --
+# arrows, accented letters, whole layout tables -- are output and sit in
+# literals; comments are prose.
+ascii_only = true

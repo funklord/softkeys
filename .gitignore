@@ -1,0 +1,6 @@
+/build/
+/build-test/
+/.qmake.stash
+__pycache__/
+*.o
+moc_*
