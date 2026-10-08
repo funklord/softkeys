@@ -95,8 +95,9 @@ key on this one switches back.
    changed in the move. **Where it stands, 2026-10-08:** the interfaces and
    the `sk_` names were made inside BeerSSH first (its commits `a67bc6a`,
    `19e6d86`) and proved by its suite; the code is here from `19e6d86`, with
-   this tree's own tests; BeerSSH's switch to the submodule waits on this
-   tree's GitHub repository, which the holder is creating.
+   this tree's own tests. BeerSSH builds from this tree as its `softkeys`
+   submodule since 2026-10-08 (its commit `0f8357b`), with its suite
+   unchanged at 756 and its 73 keyboard sabotage specs all caught here.
 3. **The generic target and the editing page.** [2026-10-08]
    `sk_focus_target` sends every key to the focused widget as the key event
    a physical keyboard would; `sk_set_compact_pages` lets an application
@@ -132,6 +133,13 @@ a key with no text. Deleting that branch left the Ctrl+A test green: Qt's
 `QInputControl` refuses text under Ctrl, and the key alone matched Select All.
 Alt has no such guard, so the test asserts Alt+f types nothing; that is the
 case the branch exists for, and the sabotage now fails there.
+
+**The style gate is the shared one, and so is its suite.** softkeys was added
+to the holder's private list on 2026-10-08 (claude-guidelines `fc87500`), which
+puts it in `sync.py`'s spread: `tool/style_gate.py` and now
+`tool/test_style_gate.py` are copies of `~/.claude/tool/`, and `make style`
+runs the suite before the gate, since a gate's pass means something only once
+the gate is known to work.
 
 ## 7. Open
 
