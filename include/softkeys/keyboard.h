@@ -87,6 +87,17 @@ public:
 	 */
 	QWidget *half(int side) const { return m_halves[side ? 1 : 0]; }
 
+	/*
+	 * A place above each half's keys for the application's own widgets,
+	 * 0 for the left half and 1 for the right, laid out by a QVBoxLayout:
+	 * add to header->layout(). The keys sit at the bottom, where thumbs
+	 * are, so a short wide window has a band above them doing nothing --
+	 * BeerSSH puts its status line and its input selector there, and the
+	 * terminal gets the row they used to take. Empty, it takes no height.
+	 * What is added stays the application's; rebuilds leave it alone.
+	 */
+	QWidget *half_header(int side) const { return m_half_headers[side ? 1 : 0]; }
+
 	/* How wide each half's keys are, in dp; the window decides. */
 	void set_half_width(int width_dp);
 
@@ -172,6 +183,7 @@ private:
 	QWidget *m_side = nullptr;
 	QWidget *m_halves[2] = { nullptr, nullptr };
 	QWidget *m_half_keys[2] = { nullptr, nullptr };
+	QWidget *m_half_headers[2] = { nullptr, nullptr };
 	QGridLayout *m_half_grids[2] = { nullptr, nullptr };
 	QAbstractButton *m_group_button;
 

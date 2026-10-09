@@ -1,7 +1,10 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QClipboard>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QLineEdit>
+#include <QPointer>
 #include <QPlainTextEdit>
 #include <QtTest>
 
@@ -87,6 +90,7 @@ private slots:
 	void a_named_key_carries_the_text_a_keyboard_would();
 	void the_editing_page_cuts_pastes_undoes_and_selects();
 	void pages_are_the_applications_choice();
+	void a_half_header_sits_above_the_keys_and_survives_a_rebuild();
 };
 
 void softkeys_test::a_tap_cycles_once_locked_off() {
@@ -335,6 +339,41 @@ void softkeys_test::pages_are_the_applications_choice() {
 		QCOMPARE(page.rows.size(), sk_catalog::instance().all(sk_catalog::STYLE_COMPACT).first().rows.size());
 	}
 	QCOMPARE(built.mid(0, every.size()), every);
+}
+
+void softkeys_test::a_half_header_sits_above_the_keys_and_survives_a_rebuild() {
+	recording_target target;
+	sk_keyboard keyboard(&target);
+	keyboard.set_style(sk_catalog::STYLE_SPLIT);
+
+	/* The halves outside the keyboard, where an application puts them. */
+	QWidget window;
+	QHBoxLayout *row = new QHBoxLayout(&window);
+	row->addWidget(keyboard.half(0));
+	row->addWidget(keyboard.half(1));
+	window.resize(800, 400);
+	window.show();
+	keyboard.show();
+	QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+	QPointer<QLabel> status = new QLabel(QStringLiteral("connected"));
+	keyboard.half_header(0)->layout()->addWidget(status);
+	QCoreApplication::processEvents();
+
+	/* A page change empties the grids; the header is not the grid's. */
+	keyboard.set_group(1);
+	QCoreApplication::processEvents();
+	QTest::qWait(1);
+	QVERIFY2(status, "a rebuild deleted what the application put in the header");
+	QVERIFY(status->isVisible());
+
+	const QList<sk_key_cap *> caps = keyboard.half(0)->findChildren<sk_key_cap *>();
+	QVERIFY(!caps.isEmpty());
+	int top = INT_MAX;
+	for (const sk_key_cap *cap : caps) top = qMin(top, cap->mapTo(&window, QPoint(0, 0)).y());
+	const int status_bottom = status->mapTo(&window, QPoint(0, status->height())).y();
+	QVERIFY2(status_bottom <= top, qPrintable(QStringLiteral("the header ends at %1, the keys start at %2")
+	                                               .arg(status_bottom).arg(top)));
 }
 
 int main(int argc, char *argv[]) {

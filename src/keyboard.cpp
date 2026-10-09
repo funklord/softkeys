@@ -241,10 +241,26 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 		row->setContentsMargins(0, 0, 0, 0);
 		row->setSpacing(1);
 
+		/*
+		 * A column: the application's header on top (half_header), the
+		 * keys under it. The header is outside the grid because rebuild()
+		 * empties the grid, and what the application put there is not
+		 * the keyboard's to delete. Empty, it takes no height.
+		 */
 		m_half_keys[side] = new QWidget(m_halves[side]);
-		m_half_grids[side] = new QGridLayout(m_half_keys[side]);
+		QVBoxLayout *column = new QVBoxLayout(m_half_keys[side]);
+		column->setContentsMargins(0, 0, 0, 0);
+		column->setSpacing(1);
+		m_half_headers[side] = new QWidget(m_half_keys[side]);
+		QVBoxLayout *header = new QVBoxLayout(m_half_headers[side]);
+		header->setContentsMargins(0, 0, 0, 0);
+		header->setSpacing(0);
+		column->addWidget(m_half_headers[side], 0);
+		QWidget *keys = new QWidget(m_half_keys[side]);
+		m_half_grids[side] = new QGridLayout(keys);
 		m_half_grids[side]->setContentsMargins(0, 0, 0, 0);
 		m_half_grids[side]->setSpacing(1);
+		column->addWidget(keys, 1);
 		row->addWidget(m_half_keys[side], 1);
 
 		/*
