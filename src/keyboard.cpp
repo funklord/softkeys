@@ -10,6 +10,7 @@
 #include "softkeys/keyboard.h"
 
 #include "softkeys/key_cap.h"
+#include "softkeys/painted_icon.h"
 #include "softkeys/resize_grip.h"
 #include "softkeys/touch_chords.h"
 
@@ -29,142 +30,6 @@
 #include "softkeys/metrics.h"
 
 namespace {
-
-/*
- * The two side-column icons, DRAWN rather than set from a character.
- *
- * A gear at U+2699 and a chevron at U+25BE would be three lines of code
- * and a gamble: the label font is the system's, Android falls back
- * through it for symbols, and a device without the glyph draws a tofu
- * box. sec 11's rule is absent-not-faked, and a box where a control
- * should be is worse than the word it replaced. Qt's standard pixmaps
- * have no settings icon either.
- *
- * So they are painted from primitives, which cannot be missing, scale
- * with the button, and take their colour from the palette -- so they
- * follow the light and dark schemes without a second asset.
- */
-QIcon sk_painted_icon(const QColor &ink, int size, bool settings) {
-	QPixmap canvas(size, size);
-	canvas.fill(Qt::transparent);
-
-	QPainter painter(&canvas);
-	painter.setRenderHint(QPainter::Antialiasing, true);
-
-	QPen pen(ink);
-	pen.setWidthF(qMax(1.5, size / 11.0));
-	pen.setCapStyle(Qt::RoundCap);
-	pen.setJoinStyle(Qt::RoundJoin);
-	painter.setPen(pen);
-
-	const qreal unit = size;
-	if (settings) {
-		/*
-		 * A cog: the settings symbol everywhere a person has used a
-		 * phone, so it needs no learning.
-		 *
-		 * This was three sliders, and the reasoning for them was
-		 * backwards. Sliders were chosen because a gear's teeth are the
-		 * first thing to turn to mush at 36dp -- an argument about
-		 * RENDERING, offered against an argument about MEANING, and
-		 * meaning wins: sliders read as a filter or an equaliser to most
-		 * people, and an icon that has to be explained is the wrong
-		 * icon. Reported by the copyright holder, who expected a cog.
-		 *
-		 * The rendering problem is real and is answered by drawing
-		 * FEWER, FATTER teeth than a gear really has. Six radial strokes
-		 * with round caps stay separate at any size this is drawn at; a
-		 * finely-toothed gear becomes a blurred disc, which is what the
-		 * old comment was afraid of and was right about.
-		 */
-		const QPointF centre(unit * 0.5, unit * 0.5);
-
-		/*
-		 * FILLED, not stroked, and that is the whole difference between
-		 * a cog and a ship's wheel.
-		 *
-		 * The first attempt drew a stroked ring with six radial lines
-		 * out of it. On a device it read as a helm or a sun: thin spokes
-		 * STICKING OUT of a circle, where a gear's teeth are part of the
-		 * rim. So the outline is one path -- out to the tooth, along it,
-		 * back to the rim, around to the next -- filled solid, with the
-		 * centre punched out by an odd-even subpath.
-		 */
-		/*
-		 * Eight teeth with RADIAL sides, and the sides are what matter.
-		 *
-		 * The version before this walked from the rim at one angle out
-		 * to the tip at another, so every tooth was a wedge that came to
-		 * a point, and the whole read as a starfish -- reported as "not
-		 * quite clear", which it was. A gear tooth has parallel flanks:
-		 * both corners of its base sit at the SAME angles as the two
-		 * corners of its tip, so the side runs straight out along a
-		 * radius and the top is flat.
-		 *
-		 * Short teeth, too. The rim is 0.33 and the tip 0.42, about a
-		 * quarter again rather than half, because a tall tooth on a
-		 * small body is the other half of the starfish.
-		 */
-		const int teeth = 8;
-		const qreal step = 360.0 / teeth;
-		const qreal half = step * 0.20;
-		const qreal outer = unit * 0.42;
-		const qreal inner = unit * 0.33;
-
-		const auto polar = [&](qreal degrees, qreal radius) {
-			const qreal angle = qDegreesToRadians(degrees);
-			return QPointF(centre.x() + std::cos(angle) * radius,
-			                centre.y() + std::sin(angle) * radius);
-		};
-
-		/*
-		 * Between the teeth the outline follows the root CIRCLE rather
-		 * than a straight chord, which would flatten the body.
-		 *
-		 * arcTo's angles run the other way from polar(): Qt measures
-		 * counter-clockwise from three o'clock and screen y grows
-		 * downward, so a clockwise walk is negated.
-		 */
-		const QRectF root(centre.x() - inner, centre.y() - inner,
-		                   inner * 2, inner * 2);
-
-		QPainterPath gear;
-		gear.moveTo(polar(-half, inner));
-		for (int i = 0; i < teeth; ++i) {
-			const qreal base = step * i;
-			gear.lineTo(polar(base - half, inner));
-			gear.lineTo(polar(base - half, outer));
-			gear.lineTo(polar(base + half, outer));
-			gear.lineTo(polar(base + half, inner));
-			gear.arcTo(root, -(base + half), -(step - half * 2));
-		}
-		gear.closeSubpath();
-
-		/* The hole. Without it a filled gear is just a lumpy disc. */
-		gear.addEllipse(centre, unit * 0.15, unit * 0.15);
-		gear.setFillRule(Qt::OddEvenFill);
-
-		painter.setPen(Qt::NoPen);
-		painter.fillPath(gear, ink);
-	} else {
-		/*
-		 * A chevron coming down to a bar: the keyboard going away, which
-		 * is what every platform's dismiss control draws.
-		 */
-		QPainterPath path;
-		path.moveTo(unit * 0.26, unit * 0.34);
-		path.lineTo(unit * 0.50, unit * 0.56);
-		path.lineTo(unit * 0.74, unit * 0.34);
-		painter.drawPath(path);
-		painter.drawLine(QPointF(unit * 0.26, unit * 0.74),
-		                  QPointF(unit * 0.74, unit * 0.74));
-	}
-
-	painter.end();
-	return QIcon(canvas);
-}
-
-
 
 /*
  * How wide a key may be asked to be, in device-independent pixels.
@@ -193,6 +58,7 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
       m_group_button(nullptr),
       m_settings_button(nullptr),
       m_hide_button(nullptr),
+      m_system_button(nullptr),
       m_script_button(nullptr),
       m_group(0),
       m_style(sk_catalog::STYLE_COMPACT) {
@@ -341,6 +207,25 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 	side->addWidget(m_settings_button, 0);
 
 	/*
+	 * Back to the system keyboard, for an application that switched to
+	 * this one from it (softkeys' project.md sec 4). In the settings
+	 * key's place rather than beside it: the column is four keys tall on
+	 * a phone and the page button needs the room, and an application
+	 * offering the system keyboard is one whose settings are a page away
+	 * anyway.
+	 */
+	m_system_button = new QToolButton(this);
+	m_system_button->setObjectName(QStringLiteral("keyboard-system"));
+	m_system_button->setAccessibleName(QStringLiteral("System keyboard"));
+	m_system_button->setToolTip(QStringLiteral("System keyboard"));
+	m_system_button->setFocusPolicy(Qt::NoFocus);
+	m_system_button->setMinimumWidth(SK_TOUCH_TARGET_DP);
+	m_system_button->setMinimumHeight(SK_TOUCH_TARGET_DP);
+	m_system_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	m_system_button->hide();
+	side->addWidget(m_system_button, 0);
+
+	/*
 	 * The script toggle, and it is only here for a layout that needs it.
 	 *
 	 * Russian, Greek and Ukrainian put their own script on the whole
@@ -390,12 +275,14 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 	outer->addWidget(m_side, 0);
 
 	connect(m_group_button, &QAbstractButton::clicked, this, [this] {
-		set_group(sk_catalog::instance().next_index(m_group, m_style));
+		set_group(m_group + 1);
 	});
 	connect(m_settings_button, &QAbstractButton::clicked,
 	         this, &sk_keyboard::settings_requested);
 	connect(m_hide_button, &QAbstractButton::clicked,
 	         this, &sk_keyboard::hide_requested);
+	connect(m_system_button, &QAbstractButton::clicked,
+	         this, &sk_keyboard::system_keyboard_requested);
 
 	/*
 	 * One handler for the whole keyboard, halves included: a chord can
@@ -436,10 +323,29 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 }
 
 QString sk_keyboard::group_id() const {
-	const QList<sk_group_t> &groups =
-	        sk_catalog::instance().all(m_style);
+	const QList<sk_group_t> &groups = walked_groups();
 	if (m_group < 0 || m_group >= groups.size()) return QString();
 	return groups.at(m_group).id;
+}
+
+void sk_keyboard::set_system_key_shown(bool shown) {
+	m_system_button->setVisible(shown);
+	m_settings_button->setVisible(!shown);
+}
+
+QList<sk_group_t> sk_keyboard::walked_groups() const {
+	const sk_catalog &catalog = sk_catalog::instance();
+	if (m_style == sk_catalog::STYLE_FULL || m_pages.isEmpty()) return catalog.all(m_style);
+	return catalog.compact_groups(m_pages);
+}
+
+bool sk_keyboard::set_pages(const QStringList &ids, QString *why) {
+	if (!ids.isEmpty() && !sk_compact_pages_valid(ids, why)) return false;
+	if (ids == m_pages) return true;
+	m_pages = ids;
+	m_group = 0;
+	rebuild();
+	return true;
 }
 
 void sk_keyboard::set_style(sk_catalog::style_t style) {
@@ -451,8 +357,7 @@ void sk_keyboard::set_style(sk_catalog::style_t style) {
 }
 
 void sk_keyboard::set_group(int index) {
-	const QList<sk_group_t> &groups =
-	        sk_catalog::instance().all(m_style);
+	const QList<sk_group_t> &groups = walked_groups();
 	if (groups.isEmpty()) return;
 
 	const int wanted = (index % groups.size() + groups.size()) % groups.size();
@@ -637,8 +542,7 @@ void sk_keyboard::rebuild() {
 		QTimer::singleShot(0, [retired] { qDeleteAll(retired); });
 	}
 
-	const QList<sk_group_t> &groups =
-	        sk_catalog::instance().all(m_style);
+	const QList<sk_group_t> &groups = walked_groups();
 	if (m_group < 0 || m_group >= groups.size()) return;
 
 	const sk_group_t &group = groups.at(m_group);
@@ -678,7 +582,7 @@ void sk_keyboard::rebuild() {
 	 * The side button names the group it goes TO, not the one on screen.
 	 * A button labelled with where you already are is one nobody presses.
 	 */
-	const int next = sk_catalog::instance().next_index(m_group, m_style);
+	const int next = groups.isEmpty() ? 0 : (m_group + 1) % groups.size();
 	if (next >= 0 && next < groups.size()) {
 		m_group_button->setText(groups.at(next).button_label);
 	}
@@ -860,8 +764,7 @@ void sk_keyboard::set_grips_shown(bool shown) {
 }
 
 int sk_keyboard::row_count() const {
-	const QList<sk_group_t> &groups =
-	        sk_catalog::instance().all(m_style);
+	const QList<sk_group_t> &groups = walked_groups();
 	if (m_group < 0 || m_group >= groups.size()) return 1;
 	return qMax(1, int(groups.at(m_group).rows.size()));
 }
@@ -971,16 +874,19 @@ void sk_keyboard::refresh_script_button() {
 }
 
 void sk_keyboard::refresh_side_icons() {
-	if (!m_settings_button || !m_hide_button) return;
+	if (!m_settings_button || !m_hide_button || !m_system_button) return;
 
 	const QColor ink = palette().color(QPalette::ButtonText);
 	const int size = qMax(16, int(SK_TOUCH_TARGET_DP * 0.55));
 
-	m_settings_button->setIcon(sk_painted_icon(ink, size * 2, true));
+	m_settings_button->setIcon(sk_painted_icon(SK_ICON_SETTINGS, ink, size * 2));
 	m_settings_button->setIconSize(QSize(size, size));
 
-	m_hide_button->setIcon(sk_painted_icon(ink, size * 2, false));
+	m_hide_button->setIcon(sk_painted_icon(SK_ICON_HIDE, ink, size * 2));
 	m_hide_button->setIconSize(QSize(size, size));
+
+	m_system_button->setIcon(sk_painted_icon(SK_ICON_KEYBOARD, ink, size * 2));
+	m_system_button->setIconSize(QSize(size, size));
 }
 
 void sk_keyboard::changeEvent(QEvent *event) {

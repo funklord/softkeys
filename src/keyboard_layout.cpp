@@ -2753,12 +2753,16 @@ void sk_catalog::rebuild() {
 	const sk_layout_t *chosen = g_layout;
 	if (g_latin_mode && !layout_has_latin(chosen)) g_layout = &SK_LAYOUTS[0];
 
-	for (const QString &id : g_compact_pages) {
-		if (id == QLatin1String("letters")) m_groups.append(letters_group());
-		else if (id == QLatin1String("numbers")) m_groups.append(numbers_group());
-		else if (id == QLatin1String("terminal")) m_groups.append(terminal_group());
-		else if (id == QLatin1String("editing")) m_groups.append(editing_group());
-	}
+	/*
+	 * Every page is built, chosen or not, so a keyboard with pages of its
+	 * own (sk_keyboard::set_pages) draws from the same build as the
+	 * catalog's default list rather than from a second one.
+	 */
+	m_pool.clear();
+	m_pool.append(letters_group());
+	m_pool.append(numbers_group());
+	m_pool.append(terminal_group());
+	m_pool.append(editing_group());
 
 
 	/*
@@ -2773,12 +2777,8 @@ void sk_catalog::rebuild() {
 	 * one, so "abc" and "123" have no sibling that is true everywhere.
 	 * German shows eszett, French shows two of its four.
 	 */
-	sk_group_t outer = outer_slots_group();
-	const QString adds = letters_this_page_adds(m_groups, outer);
-	if (!adds.isEmpty()) {
-		outer.button_label = adds.left(2);
-		m_groups.append(outer);
-	}
+	m_outer = outer_slots_group();
+	m_groups = compact_groups(g_compact_pages);
 
 	m_full.append(full_main_group());
 	m_full.append(full_keypad_group());
@@ -3096,7 +3096,7 @@ QStringList sk_compact_pages() {
 	return g_compact_pages;
 }
 
-bool sk_set_compact_pages(const QStringList &ids, QString *why) {
+bool sk_compact_pages_valid(const QStringList &ids, QString *why) {
 	const QStringList known = sk_compact_page_ids();
 	QString refusal;
 	if (!ids.contains(QStringLiteral("letters"))) {
@@ -3111,6 +3111,11 @@ bool sk_set_compact_pages(const QStringList &ids, QString *why) {
 		if (why) *why = refusal;
 		return false;
 	}
+	return true;
+}
+
+bool sk_set_compact_pages(const QStringList &ids, QString *why) {
+	if (!sk_compact_pages_valid(ids, why)) return false;
 	if (g_compact_pages != ids) {
 		g_compact_pages = ids;
 		sk_catalog::instance().rebuild();
@@ -3165,6 +3170,28 @@ bool sk_set_keyboard_layout(const QString &id) {
 sk_catalog &sk_catalog::instance() {
 	static sk_catalog catalog;
 	return catalog;
+}
+
+QList<sk_group_t> sk_catalog::compact_groups(const QStringList &pages) const {
+	QList<sk_group_t> groups;
+	for (const QString &id : pages) {
+		for (const sk_group_t &group : m_pool) {
+			if (group.id == id) groups.append(group);
+		}
+	}
+
+	/*
+	 * The fourth page, judged against THESE pages: what it adds is what
+	 * they leave unreachable, so its label names letters this keyboard
+	 * cannot otherwise type.
+	 */
+	sk_group_t outer = m_outer;
+	const QString adds = letters_this_page_adds(groups, outer);
+	if (!adds.isEmpty()) {
+		outer.button_label = adds.left(2);
+		groups.append(outer);
+	}
+	return groups;
 }
 
 int sk_catalog::next_index(int index, style_t style) const {

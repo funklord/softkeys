@@ -6,12 +6,16 @@
 #include <QLineEdit>
 #include <QPointer>
 #include <QPlainTextEdit>
+#include <QPushButton>
+#include <QSignalSpy>
+#include <QVBoxLayout>
 #include <QtTest>
 
 #include "softkeys/focus_target.h"
 #include "softkeys/key_cap.h"
 #include "softkeys/keyboard.h"
 #include "softkeys/keyboard_layout.h"
+#include "softkeys/keyboard_switch.h"
 #include "softkeys/modifiers.h"
 #include "softkeys/target.h"
 
@@ -91,6 +95,9 @@ private slots:
 	void the_editing_page_cuts_pastes_undoes_and_selects();
 	void pages_are_the_applications_choice();
 	void a_half_header_sits_above_the_keys_and_survives_a_rebuild();
+	void a_keyboard_walks_its_own_pages();
+	void the_system_key_takes_the_settings_keys_place();
+	void the_switch_shows_over_a_field_while_the_panel_is_up();
 };
 
 void softkeys_test::a_tap_cycles_once_locked_off() {
@@ -374,6 +381,140 @@ void softkeys_test::a_half_header_sits_above_the_keys_and_survives_a_rebuild() {
 	const int status_bottom = status->mapTo(&window, QPoint(0, status->height())).y();
 	QVERIFY2(status_bottom <= top, qPrintable(QStringLiteral("the header ends at %1, the keys start at %2")
 	                                               .arg(status_bottom).arg(top)));
+}
+
+namespace {
+
+/* The ids the side button walks, from where the keyboard is, once round. */
+QStringList walked(sk_keyboard &keyboard) {
+	QStringList ids;
+	keyboard.set_group(0);
+	do {
+		ids.append(keyboard.group_id());
+		keyboard.group_button()->click();
+	} while (keyboard.group() != 0 && ids.size() < 10);
+	return ids;
+}
+
+} /* namespace */
+
+/*
+ * Two keyboards in one application, a terminal's and a form's, each
+ * walking its own pages -- and neither moved by the other or by the
+ * application-wide default.
+ */
+void softkeys_test::a_keyboard_walks_its_own_pages() {
+	pages_restored restore;
+	recording_target target;
+	sk_keyboard form(&target);
+	sk_keyboard terminal(&target);
+
+	const QStringList chosen = { QStringLiteral("letters"), QStringLiteral("editing"),
+	                             QStringLiteral("numbers") };
+	QVERIFY(form.set_pages(chosen));
+	QCOMPARE(walked(form).mid(0, chosen.size()), chosen);
+	QCOMPARE(walked(terminal), sk_compact_pages());
+
+	QString why;
+	QVERIFY(!form.set_pages({ QStringLiteral("editing") }, &why));
+	QVERIFY(why.contains(QStringLiteral("letters")));
+	QCOMPARE(form.pages(), chosen);
+
+	QVERIFY(sk_set_compact_pages({ QStringLiteral("letters"), QStringLiteral("terminal") }));
+	terminal.rebuild_keys();
+	form.rebuild_keys();
+	/* Without the numbers page the fourth one may follow; it is not chosen. */
+	QCOMPARE(walked(terminal).mid(0, 2), QStringList({ QStringLiteral("letters"), QStringLiteral("terminal") }));
+	QCOMPARE(walked(form).mid(0, chosen.size()), chosen);
+
+	/* And empty goes back to the default. */
+	QVERIFY(form.set_pages({}));
+	QCOMPARE(walked(form), walked(terminal));
+}
+
+void softkeys_test::the_system_key_takes_the_settings_keys_place() {
+	recording_target target;
+	sk_keyboard keyboard(&target);
+	QAbstractButton *settings = keyboard.findChild<QAbstractButton *>(QStringLiteral("keyboard-settings"));
+	QVERIFY(settings);
+	QVERIFY(keyboard.system_button());
+
+	QVERIFY(keyboard.system_button()->isHidden());
+	QVERIFY(!settings->isHidden());
+
+	keyboard.set_system_key_shown(true);
+	QVERIFY(!keyboard.system_button()->isHidden());
+	QVERIFY(settings->isHidden());
+
+	QSignalSpy asked(&keyboard, &sk_keyboard::system_keyboard_requested);
+	keyboard.system_button()->click();
+	QCOMPARE(asked.count(), 1);
+
+	keyboard.set_system_key_shown(false);
+	QVERIFY(keyboard.system_button()->isHidden());
+	QVERIFY(!settings->isHidden());
+}
+
+/*
+ * The switch shows when it means something and not otherwise: offered,
+ * the system keyboard up, and a text field focused in the window. Each
+ * of the three is taken away in turn with the other two held.
+ */
+void softkeys_test::the_switch_shows_over_a_field_while_the_panel_is_up() {
+	QWidget window;
+	QVBoxLayout *column = new QVBoxLayout(&window);
+	QLineEdit *top = new QLineEdit(&window);
+	QPushButton *button = new QPushButton(QStringLiteral("not a field"), &window);
+	button->setFocusPolicy(Qt::StrongFocus);
+	column->addWidget(top);
+	column->addWidget(button);
+	column->addStretch(1);
+	window.resize(400, 600);
+
+	bool panel = true;
+	sk_keyboard_switch toggle(&window);
+	toggle.set_panel_probe([&panel] { return panel; });
+
+	window.show();
+	window.activateWindow();
+	QVERIFY(QTest::qWaitForWindowActive(&window));
+	top->setFocus();
+	QCoreApplication::processEvents();
+
+	QVERIFY(!toggle.isVisible());
+	toggle.set_offered(true);
+	QVERIFY(toggle.isVisible());
+
+	/* The top-left of the room the system keyboard leaves. */
+	QVERIFY(toggle.geometry().left() < window.width() / 2);
+	QCOMPARE(toggle.geometry().bottom(), window.height() - 4 - 1);
+
+	panel = false;
+	toggle.refresh();
+	QVERIFY(!toggle.isVisible());
+	panel = true;
+	toggle.refresh();
+	QVERIFY(toggle.isVisible());
+
+	button->setFocus();
+	QTRY_VERIFY(!toggle.isVisible());
+	top->setFocus();
+	QTRY_VERIFY(toggle.isVisible());
+
+	QSignalSpy asked(&toggle, &sk_keyboard_switch::switch_requested);
+	toggle.click();
+	QCOMPARE(asked.count(), 1);
+	QCOMPARE(QApplication::focusWidget(), static_cast<QWidget *>(top));
+
+	/* A field under the bottom-left is not covered: the switch moves over. */
+	top->setGeometry(0, window.height() - 40, window.width() / 3, 40);
+	toggle.refresh();
+	QVERIFY(toggle.isVisible());
+	QVERIFY(toggle.geometry().left() > window.width() / 2);
+	QVERIFY(!toggle.geometry().intersects(top->geometry()));
+
+	toggle.set_offered(false);
+	QVERIFY(!toggle.isVisible());
 }
 
 int main(int argc, char *argv[]) {

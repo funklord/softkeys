@@ -246,6 +246,9 @@ QStringList sk_compact_page_ids();
 QStringList sk_compact_pages();
 bool sk_set_compact_pages(const QStringList &ids, QString *why = nullptr);
 
+/* The check sk_set_compact_pages makes, for sk_keyboard::set_pages too. */
+bool sk_compact_pages_valid(const QStringList &ids, QString *why = nullptr);
+
 /*
  * The Latin toggle, for a layout whose letter block is not Latin.
  *
@@ -344,9 +347,21 @@ public:
 	 */
 	void rebuild();
 
+	/*
+	 * The compact groups for a keyboard with pages of its own, from the
+	 * same build as all(): the named pages in that order, then the
+	 * fourth page where the layout needs one. The ids are not checked
+	 * here; sk_compact_pages_valid says whether a list is one to accept.
+	 */
+	QList<sk_group_t> compact_groups(const QStringList &pages) const;
+
 private:
 	QList<sk_group_t> m_groups;
 	QList<sk_group_t> m_full;
+
+	/* Every compact page, chosen or not, and the fourth page unlabelled. */
+	QList<sk_group_t> m_pool;
+	sk_group_t m_outer;
 };
 
 /*

@@ -3,6 +3,7 @@
 
 #include <QList>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
 
 #include "softkeys/key_row_layout.h"
@@ -111,6 +112,24 @@ public:
 	/* Whether the resize bars show (sec 6.2); a setting decides. */
 	void set_grips_shown(bool shown);
 
+	/*
+	 * This keyboard's own pages, in the order the side button walks them,
+	 * for an application with two keyboards wanting different pages -- a
+	 * terminal's and a form's. Empty follows sk_compact_pages(). Refused,
+	 * with the reason, on the terms sk_set_compact_pages refuses; the full
+	 * keyboard has no pages to choose and ignores this.
+	 */
+	bool set_pages(const QStringList &ids, QString *why = nullptr);
+	QStringList pages() const { return m_pages; }
+
+	/*
+	 * The key back to the system keyboard, in the settings key's place,
+	 * for an application that switched to this keyboard from that one
+	 * (softkeys' project.md sec 4). Off by default.
+	 */
+	void set_system_key_shown(bool shown);
+	QAbstractButton *system_button() const { return m_system_button; }
+
 	/* The smallest a key gets by dragging, in dp. */
 	static constexpr int SMALLEST_KEY_DP = 28;
 
@@ -138,6 +157,12 @@ signals:
 	 */
 	void hide_requested();
 
+	/*
+	 * The system keyboard key: the application hides this keyboard and
+	 * brings the system's back, as it did the reverse to get here.
+	 */
+	void system_keyboard_requested();
+
 protected:
 	void changeEvent(QEvent *event) override;
 	void showEvent(QShowEvent *event) override;
@@ -145,6 +170,9 @@ protected:
 
 private:
 	void rebuild();
+
+	/* The groups the side button walks: this keyboard's pages, or the default. */
+	QList<sk_group_t> walked_groups() const;
 	void refresh_side_icons();
 	void refresh_script_button();
 	sk_key_cap *make_button(const QString &label, QWidget *parent);
@@ -206,6 +234,8 @@ private:
 	QAbstractButton *m_settings_button;
 	QAbstractButton *m_hide_button;
 	QAbstractButton *m_script_button;
+	QAbstractButton *m_system_button;
+	QStringList m_pages;
 
 	int m_group;
 	sk_catalog::style_t m_style;

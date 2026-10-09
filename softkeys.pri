@@ -18,7 +18,9 @@ SOURCES += \
     $$SOFTKEYS_ROOT/src/key_row_layout.cpp \
     $$SOFTKEYS_ROOT/src/keyboard.cpp \
     $$SOFTKEYS_ROOT/src/keyboard_layout.cpp \
+    $$SOFTKEYS_ROOT/src/keyboard_switch.cpp \
     $$SOFTKEYS_ROOT/src/modifiers.cpp \
+    $$SOFTKEYS_ROOT/src/painted_icon.cpp \
     $$SOFTKEYS_ROOT/src/resize_grip.cpp \
     $$SOFTKEYS_ROOT/src/touch_chords.cpp
 
@@ -29,8 +31,10 @@ HEADERS += \
     $$SOFTKEYS_ROOT/include/softkeys/key_row_layout.h \
     $$SOFTKEYS_ROOT/include/softkeys/keyboard.h \
     $$SOFTKEYS_ROOT/include/softkeys/keyboard_layout.h \
+    $$SOFTKEYS_ROOT/include/softkeys/keyboard_switch.h \
     $$SOFTKEYS_ROOT/include/softkeys/metrics.h \
     $$SOFTKEYS_ROOT/include/softkeys/modifiers.h \
+    $$SOFTKEYS_ROOT/include/softkeys/painted_icon.h \
     $$SOFTKEYS_ROOT/include/softkeys/resize_grip.h \
     $$SOFTKEYS_ROOT/include/softkeys/target.h \
     $$SOFTKEYS_ROOT/include/softkeys/touch_chords.h

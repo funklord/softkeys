@@ -106,7 +106,19 @@ key on this one switches back.
    PgDn; Shift for selecting. Its keys are the widgets' own bindings (Ctrl+Z,
    Ctrl+Shift+Z, Ctrl+Left...), so the widget decides what each does. The
    default pages stay letters, numbers, terminal, so BeerSSH is unchanged.
-4. **The switch button.**
+4. **The switch button.** [2026-10-09] `sk_keyboard_switch` is a button
+   over the application's window, at the bottom-left -- the top-left of the
+   room the system keyboard leaves -- shown only while the application
+   offers it, the system keyboard is up and a text field in the window has
+   the focus; it moves to the bottom-right rather than cover a field there.
+   Pressing it only says so (`switch_requested`): the application hides the
+   system keyboard and shows its own, since only it knows where that goes.
+   The way back is `sk_keyboard::set_system_key_shown`, a key in the
+   settings key's place emitting `system_keyboard_requested`. And
+   `sk_keyboard::set_pages` gives one keyboard pages of its own, because an
+   application with a terminal's keyboard and a form's wants both, and the
+   catalog's list is one per application. BeerSSH is the first to use it,
+   in its forms, by the holder's choice.
 5. **fuzznet adopts it**, arranged with whichever session is working there
    (its inbox, `.git/cc-inbox/`), since that tree is in active use.
 
