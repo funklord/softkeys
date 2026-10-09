@@ -6,3 +6,4 @@ __pycache__/
 moc_*
 .fmake/
 /softkeys-tests
+/build-mk/

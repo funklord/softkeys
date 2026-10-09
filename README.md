@@ -18,7 +18,10 @@ for use beside the system keyboard. Extracted from BeerSSH.
     make style      # the style gate
 
 An application built with qmake compiles softkeys in with
-`include(softkeys/softkeys.pri)`.
+`include(softkeys/softkeys.pri)`; one with a hand-written Makefile sets
+`SOFTKEYS_DIR` and includes `softkeys.mk`, which lists the sources, the
+headers moc must see, and the include directory (`make check-mk` builds
+the tests from it alone).
 
 For an ordinary application, `sk_focus_target` types into whatever widget has
 focus, and `sk_set_compact_pages` adds the `editing` page -- undo, the
