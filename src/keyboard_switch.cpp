@@ -67,17 +67,28 @@ void sk_keyboard_switch::refresh() {
 		return;
 	}
 
+	/*
+	 * Inside the window's CONTENTS, not its whole height. Qt 6.9 and later
+	 * draw an Android window edge to edge and report the system keyboard
+	 * as part of the safe area, which the layouts keep clear through the
+	 * contents margins while the window itself stays full height -- so on
+	 * the phone the button sat under the very keyboard it switches away
+	 * from. Where the window does shrink (adjustResize without the safe
+	 * area, or a desktop) the contents are the window and this is the same.
+	 */
+	const QRect room = m_window->contentsRect();
 	const int margin = 4;
-	QRect spot(QPoint(margin, m_window->height() - height() - margin), size());
+	QRect spot(QPoint(room.left() + margin, room.bottom() - margin - height() + 1), size());
 	const QRect under(field->mapTo(m_window, QPoint(0, 0)), field->size());
-	if (spot.intersects(under)) spot.moveRight(m_window->width() - margin - 1);
+	if (spot.intersects(under)) spot.moveRight(room.right() - margin);
 	setGeometry(spot);
 	show();
 	raise();
 }
 
 bool sk_keyboard_switch::eventFilter(QObject *watched, QEvent *event) {
-	if (watched == m_window && event->type() == QEvent::Resize) {
+	if (watched == m_window && (event->type() == QEvent::Resize
+	                            || event->type() == QEvent::ContentsRectChange)) {
 		QTimer::singleShot(0, this, [this] { refresh(); });
 	}
 	return QToolButton::eventFilter(watched, event);

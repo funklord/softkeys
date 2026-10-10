@@ -489,6 +489,16 @@ void softkeys_test::the_switch_shows_over_a_field_while_the_panel_is_up() {
 	QVERIFY(toggle.geometry().left() < window.width() / 2);
 	QCOMPARE(toggle.geometry().bottom(), window.height() - 4 - 1);
 
+	/*
+	 * The system keyboard as Qt 6.9+ reports it on Android: a bottom
+	 * margin of the safe area, the window itself staying full height. The
+	 * switch has to sit above it, not under the keyboard.
+	 */
+	window.setContentsMargins(0, 0, 0, 200);
+	QTRY_COMPARE(toggle.geometry().bottom(), window.height() - 200 - 4 - 1);
+	window.setContentsMargins(0, 0, 0, 0);
+	QTRY_COMPARE(toggle.geometry().bottom(), window.height() - 4 - 1);
+
 	panel = false;
 	toggle.refresh();
 	QVERIFY(!toggle.isVisible());
