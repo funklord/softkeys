@@ -98,6 +98,7 @@ private slots:
 	void a_keyboard_walks_its_own_pages();
 	void the_system_key_takes_the_settings_keys_place();
 	void the_switch_shows_over_a_field_while_the_panel_is_up();
+	void the_side_column_is_one_key_wide();
 };
 
 void softkeys_test::a_tap_cycles_once_locked_off() {
@@ -525,6 +526,36 @@ void softkeys_test::the_switch_shows_over_a_field_while_the_panel_is_up() {
 
 	toggle.set_offered(false);
 	QVERIFY(!toggle.isVisible());
+}
+
+/*
+ * The side column -- settings, the page button, hide -- as wide as one
+ * letter key, at a phone's width and at a tablet's. It was the 48dp touch
+ * target, which on a 320dp phone made it the widest thing on the keyboard
+ * and took the room from every letter (the holder, 2026-10-23).
+ */
+void softkeys_test::the_side_column_is_one_key_wide() {
+	for (const int across : { 320, 700 }) {
+		recording_target target;
+		QWidget window;
+		QVBoxLayout *layout = new QVBoxLayout(&window);
+		layout->setContentsMargins(0, 0, 0, 0);
+		sk_keyboard *keyboard = new sk_keyboard(&target, &window);
+		keyboard->set_style(sk_catalog::STYLE_COMPACT);
+		layout->addWidget(keyboard);
+		window.resize(across, 400);
+		window.show();
+		QVERIFY(QTest::qWaitForWindowExposed(&window));
+		QCoreApplication::processEvents();
+
+		QAbstractButton *q = button_labelled(*keyboard, QStringLiteral("q"));
+		QAbstractButton *hide = keyboard->findChild<QAbstractButton *>(QStringLiteral("keyboard-hide"));
+		QVERIFY(q && hide);
+		QTRY_VERIFY(q->width() > 0);
+		QVERIFY2(qAbs(hide->width() - q->width()) <= 3,
+		          qPrintable(QStringLiteral("at %1: the column is %2 wide, a letter %3")
+		                             .arg(across).arg(hide->width()).arg(q->width())));
+	}
 }
 
 int main(int argc, char *argv[]) {

@@ -153,6 +153,20 @@ puts it in `sync.py`'s spread: `tool/style_gate.py` and now
 runs the suite before the gate, since a gate's pass means something only once
 the gate is known to work.
 
+**The side column is one key wide, not 48dp (the holder, 2026-10-23).**
+Settings, the page button and hide were each held to `SK_TOUCH_TARGET_DP`
+across, so on a 320dp phone the column took 15% of the row while a letter
+got about 21dp: the widest thing on the keyboard, paid for by every letter
+key. `fit_side_column()` now sets it to the width the page's most common key
+spans, out of the page's columns plus the column's own share, on every
+resize and page change; the split style, where it sits in the right half's
+header, is left alone. The floor stays where `SK_KEY_MIN_WIDTH_DP` already
+put it for the keys, in height. The buttons are `Ignored` across: left to
+their size hints they kept the icon's 34px inside a 58px column at a
+tablet's width, which the first version of the test caught.
+`the_side_column_is_one_key_wide` checks a phone and a tablet width, and
+without the fit fails at 320 (a 12px column beside a 27px letter).
+
 ## 7. Open
 
 - **Application shortcuts are not reached from the keyboard.** The focus

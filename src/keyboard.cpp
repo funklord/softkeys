@@ -1,4 +1,5 @@
 #include <QEvent>
+#include <QHash>
 #include <QIcon>
 #include <QPainter>
 #include <QPainterPath>
@@ -182,6 +183,13 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 	 *
 	 * The page button keeps the stretch, so it stays the big one: it is
 	 * pressed constantly and the other two are not.
+	 *
+	 * One key wide (fit_side_column), not the 48dp touch target it was:
+	 * on a 320dp phone that took 15% of the row while each letter got
+	 * about 21dp, so the column was the widest thing on the keyboard and
+	 * paid for by every letter key (the holder, 2026-10-23). The floor is
+	 * kept where SK_KEY_MIN_WIDTH_DP keeps it for every key: in height,
+	 * where nothing competes for the room.
 	 */
 	m_side = new QWidget(this);
 	QVBoxLayout *side = new QVBoxLayout(m_side);
@@ -201,9 +209,9 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 	m_settings_button->setAccessibleName(QStringLiteral("Settings"));
 	m_settings_button->setToolTip(QStringLiteral("Settings"));
 	m_settings_button->setFocusPolicy(Qt::NoFocus);
-	m_settings_button->setMinimumWidth(SK_TOUCH_TARGET_DP);
+	m_settings_button->setMinimumWidth(SK_KEY_MIN_WIDTH_DP);
 	m_settings_button->setMinimumHeight(SK_TOUCH_TARGET_DP);
-	m_settings_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	m_settings_button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 	side->addWidget(m_settings_button, 0);
 
 	/*
@@ -219,9 +227,9 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 	m_system_button->setAccessibleName(QStringLiteral("System keyboard"));
 	m_system_button->setToolTip(QStringLiteral("System keyboard"));
 	m_system_button->setFocusPolicy(Qt::NoFocus);
-	m_system_button->setMinimumWidth(SK_TOUCH_TARGET_DP);
+	m_system_button->setMinimumWidth(SK_KEY_MIN_WIDTH_DP);
 	m_system_button->setMinimumHeight(SK_TOUCH_TARGET_DP);
-	m_system_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	m_system_button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 	m_system_button->hide();
 	side->addWidget(m_system_button, 0);
 
@@ -244,9 +252,9 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 	m_script_button = new QToolButton(this);
 	m_script_button->setObjectName(QStringLiteral("keyboard-script"));
 	m_script_button->setFocusPolicy(Qt::NoFocus);
-	m_script_button->setMinimumWidth(SK_TOUCH_TARGET_DP);
+	m_script_button->setMinimumWidth(SK_KEY_MIN_WIDTH_DP);
 	m_script_button->setMinimumHeight(SK_TOUCH_TARGET_DP);
-	m_script_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	m_script_button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 	side->addWidget(m_script_button, 0);
 
 	connect(m_script_button, &QAbstractButton::clicked, this, [this] {
@@ -256,8 +264,13 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 
 	m_group_button = new QToolButton(this);
 	m_group_button->setFocusPolicy(Qt::NoFocus);
-	m_group_button->setMinimumWidth(SK_TOUCH_TARGET_DP);
-	m_group_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+	m_group_button->setMinimumWidth(SK_KEY_MIN_WIDTH_DP);
+	/*
+	 * Ignored across, every button in the column: the column's width is
+	 * set (fit_side_column), and a button left to its own size hint kept
+	 * the icon's 34 at a tablet's width while the column beside it was 58.
+	 */
+	m_group_button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
 	side->addWidget(m_group_button, 1);
 
 	m_hide_button = new QToolButton(this);
@@ -265,9 +278,9 @@ sk_keyboard::sk_keyboard(sk_target *target, QWidget *parent)
 	m_hide_button->setAccessibleName(QStringLiteral("Hide the keyboard"));
 	m_hide_button->setToolTip(QStringLiteral("Hide the keyboard"));
 	m_hide_button->setFocusPolicy(Qt::NoFocus);
-	m_hide_button->setMinimumWidth(SK_TOUCH_TARGET_DP);
+	m_hide_button->setMinimumWidth(SK_KEY_MIN_WIDTH_DP);
 	m_hide_button->setMinimumHeight(SK_TOUCH_TARGET_DP);
-	m_hide_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	m_hide_button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
 	side->addWidget(m_hide_button, 0);
 
 	refresh_side_icons();
@@ -587,6 +600,7 @@ void sk_keyboard::rebuild() {
 		m_group_button->setText(groups.at(next).button_label);
 	}
 
+	fit_side_column();
 	refresh_modifiers();
 }
 
@@ -743,6 +757,7 @@ void sk_keyboard::update_halves() {
 	} else if (!split && m_side->parentWidget() != this) {
 		m_outer->addWidget(m_side, 0);
 	}
+	fit_side_column();
 
 	m_keys->setVisible(!split);
 	const bool shown = split && !isHidden();
@@ -750,6 +765,45 @@ void sk_keyboard::update_halves() {
 
 	m_top_grip->setVisible(m_grips_shown && !split);
 	for (QWidget *grip : m_half_grips) grip->setVisible(m_grips_shown);
+}
+
+/*
+ * The side column as wide as one key of the page shown: the width the
+ * page's most common key spans, out of the row's columns plus the
+ * column's own share -- K + S is the row, and S = K * span / columns.
+ * Counted rather than read off a button, which would be circular: the
+ * column's width is what decides the buttons'. Not for the split style,
+ * where the column sits in the right half's header and the halves have
+ * a width of their own.
+ */
+void sk_keyboard::fit_side_column() {
+	if (!m_side) return;
+	const QList<sk_group_t> &groups = walked_groups();
+	const bool unsplit = m_side->parentWidget() == this;
+	if (!unsplit || m_group < 0 || m_group >= groups.size()) {
+		m_side->setMinimumWidth(0);
+		m_side->setMaximumWidth(QWIDGETSIZE_MAX);
+		return;
+	}
+	const sk_group_t &group = groups.at(m_group);
+	QHash<int, int> spans;
+	for (const QList<sk_key_t> &row : group.rows)
+		for (const sk_key_t &key : row)
+			if (key.kind != sk_key_t::SPACER && key.span > 0) ++spans[key.span];
+	int span = 0, most = 0;
+	for (auto it = spans.cbegin(); it != spans.cend(); ++it) {
+		if (it.value() > most || (it.value() == most && it.key() < span)) {
+			span = it.key();
+			most = it.value();
+		}
+	}
+	if (span <= 0 || group.columns <= 0) return;
+	m_side->setFixedWidth(qMax(SK_KEY_MIN_WIDTH_DP, width() * span / (group.columns + span)));
+}
+
+void sk_keyboard::resizeEvent(QResizeEvent *event) {
+	QWidget::resizeEvent(event);
+	fit_side_column();
 }
 
 void sk_keyboard::set_half_width(int width_dp) {

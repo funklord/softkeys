@@ -167,6 +167,7 @@ protected:
 	void changeEvent(QEvent *event) override;
 	void showEvent(QShowEvent *event) override;
 	void hideEvent(QHideEvent *event) override;
+	void resizeEvent(QResizeEvent *event) override;
 
 private:
 	void rebuild();
@@ -180,6 +181,7 @@ private:
 	void add_key(const sk_key_t &key, QGridLayout *grid, int row, int column);
 	void lay_out_split(const sk_group_t &group);
 	void update_halves();
+	void fit_side_column();
 	void apply_bottom_height();
 	int row_count() const;
 	void refresh_modifiers();
